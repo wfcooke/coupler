@@ -182,7 +182,8 @@ module flux_exchange_mod
   use ice_model_mod,   only: ice_data_type, land_ice_boundary_type, &
        ocean_ice_boundary_type, atmos_ice_boundary_type, Ice_stock_pe, &
        ice_cell_area => cell_area
-  use    land_model_mod, only:  land_data_type, atmos_land_boundary_type
+  use    land_model_mod, only:  land_data_type, atmos_land_boundary_type, &
+       register_tiled_diag_field, send_tile_data
 
   use  surface_flux_mod, only: surface_flux
   use monin_obukhov_mod, only: mo_profile     
@@ -1932,8 +1933,7 @@ subroutine sfc_boundary_layer ( dt, Time, Atm, Land, Ice, Land_Ice_Atmos_Boundar
         endif
         if(id_q_ref_land > 0) then
            call get_from_xgrid (diag_land, 'LND', ex_ref, xmap_sfc)
-           used = send_tile_averaged_data(id_q_ref_land, diag_land, &
-                Land%tile_size, Time, mask=Land%mask)
+           call send_tile_data(id_q_ref_land, diag_land)
         endif
         ex_t_ref = 200.
         where (ex_avail) &
@@ -1950,8 +1950,7 @@ subroutine sfc_boundary_layer ( dt, Time, Atm, Land, Ice, Land_Ice_Atmos_Boundar
 
         if ( id_rh_ref_land > 0 ) then
            call get_from_xgrid (diag_land,'LND', ex_ref, xmap_sfc)
-           used = send_tile_averaged_data ( id_rh_ref_land, diag_land, &
-                Land%tile_size, Time, mask = Land%mask )
+           call send_tile_data (id_rh_ref_land, diag_land)
         endif
         if(id_rh_ref > 0) then
            call get_from_xgrid (diag_atm, 'ATM', ex_ref, xmap_sfc)
@@ -1964,13 +1963,12 @@ subroutine sfc_boundary_layer ( dt, Time, Atm, Land, Ice, Land_Ice_Atmos_Boundar
      endif
 
      !    ------- reference temp -----------
-     if ( id_t_ref > 0 .or. id_t_ref_land > 0 ) then
+     if ( id_t_ref > 0 .or. id_t_ref_land > 0) then
         where (ex_avail) &
            ex_ref = ex_t_ca + (ex_t_atm-ex_t_ca) * ex_del_h
         if (id_t_ref_land > 0) then
            call get_from_xgrid (diag_land, 'LND', ex_ref, xmap_sfc)
-           used = send_tile_averaged_data ( id_t_ref_land, diag_land, &
-                Land%tile_size, Time, mask = Land%mask )
+           call send_tile_data (id_t_ref_land, diag_land)
         endif
         if ( id_t_ref > 0 ) then
            call get_from_xgrid (diag_atm, 'ATM', ex_ref, xmap_sfc)
@@ -1984,8 +1982,7 @@ subroutine sfc_boundary_layer ( dt, Time, Atm, Land, Ice, Land_Ice_Atmos_Boundar
            ex_ref = ex_u_surf + (ex_u_atm-ex_u_surf) * ex_del_m
         if ( id_u_ref_land > 0 ) then
            call get_from_xgrid ( diag_land, 'LND', ex_ref, xmap_sfc )
-           used = send_tile_averaged_data ( id_u_ref_land, diag_land, &
-                Land%tile_size, Time, mask = Land%mask )
+           call send_tile_data ( id_u_ref_land, diag_land)
         endif
         if ( id_u_ref > 0 ) then
            call get_from_xgrid (diag_atm, 'ATM', ex_ref, xmap_sfc)
@@ -1999,8 +1996,7 @@ subroutine sfc_boundary_layer ( dt, Time, Atm, Land, Ice, Land_Ice_Atmos_Boundar
            ex_ref = ex_v_surf + (ex_v_atm-ex_v_surf) * ex_del_m
         if ( id_v_ref_land > 0 ) then
            call get_from_xgrid ( diag_land, 'LND', ex_ref, xmap_sfc )
-           used = send_tile_averaged_data ( id_v_ref_land, diag_land, &
-                Land%tile_size, Time, mask = Land%mask )
+           call send_tile_data ( id_v_ref_land, diag_land)
         endif
         if ( id_v_ref > 0 ) then
            call get_from_xgrid (diag_atm, 'ATM', ex_ref, xmap_sfc)
@@ -3988,19 +3984,19 @@ subroutine diag_field_init ( Time, atmos_axes, land_axes )
 
   ! + slm Jun 02, 2002 -- diagnostics of reference values over the land
   id_t_ref_land = &
-       register_diag_field ( mod_name, 't_ref_land', Land_axes, Time, &
+       register_tiled_diag_field ( 'land', 't_ref', Land_axes, Time, &
        'temperature at '//trim(label_zh)//' over land', 'deg_k' , &
        range=trange, missing_value =  -100.0)
   id_rh_ref_land= &
-       register_diag_field ( mod_name, 'rh_ref_land', Land_axes, Time,   &
+       register_tiled_diag_field ( 'land', 'rh_ref', Land_axes, Time,   &
        'relative humidity at '//trim(label_zh)//' over land', 'percent',       &
        missing_value=-999.0)
   id_u_ref_land = &
-       register_diag_field ( mod_name, 'u_ref_land',  Land_axes, Time, &
+       register_tiled_diag_field ( 'land', 'u_ref',  Land_axes, Time, &
        'zonal wind component at '//trim(label_zm)//' over land',  'm/s', &
        range=vrange, missing_value=-999.0 )
   id_v_ref_land = &
-       register_diag_field ( mod_name, 'v_ref_land',  Land_axes, Time,     &
+       register_tiled_diag_field ( 'land', 'v_ref',  Land_axes, Time,     &
        'meridional wind component at '//trim(label_zm)//' over land', 'm/s', &
        range=vrange, missing_value = -999.0 )
   ! - slm Jun 02, 2002
@@ -4008,7 +4004,7 @@ subroutine diag_field_init ( Time, atmos_axes, land_axes )
        register_diag_field ( mod_name, 'q_ref', atmos_axes, Time,     &
        'specific humidity at '//trim(label_zh), 'kg/kg', missing_value=-1.0)
   id_q_ref_land = &
-       register_diag_field ( mod_name, 'q_ref_land', Land_axes, Time, &
+       register_tiled_diag_field ( 'land', 'q_ref', Land_axes, Time, &
        'specific humidity at '//trim(label_zh)//' over land', 'kg/kg',          &
        missing_value=-1.0)
 
