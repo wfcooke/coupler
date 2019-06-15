@@ -320,7 +320,7 @@ program coupler_main
   use time_manager_mod,        only: NOLEAP, NO_CALENDAR, INVALID_CALENDAR
   use time_manager_mod,        only: date_to_string, increment_date
   use time_manager_mod,        only: operator(>=), operator(<=), operator(==)
-
+  use time_interp_external_mod,only: init_external_field, time_interp_external
   use fms_mod,                 only: open_namelist_file, field_exist, file_exist, check_nml_error
   use fms_mod,                 only: uppercase, error_mesg, write_version_number
   use fms_mod,                 only: fms_init, fms_end, stdout
@@ -330,6 +330,7 @@ program coupler_main
   use fms_io_mod,              only: restart_file_type, register_restart_field
   use fms_io_mod,              only: save_restart, restore_state
 
+  use mpp_domains_mod,         only: mpp_get_compute_domain
   use diag_manager_mod,        only: diag_manager_init, diag_manager_end, diag_grid_end
   use diag_manager_mod,        only: DIAG_OCEAN, DIAG_OTHER, DIAG_ALL, get_base_date
   use diag_manager_mod,        only: diag_manager_set_time_end
@@ -342,7 +343,7 @@ program coupler_main
   use coupler_types_mod,       only: coupler_types_init, coupler_1d_bc_type
   use coupler_types_mod,       only: coupler_type_write_chksums
   use coupler_types_mod,       only: coupler_type_register_restarts, coupler_type_restore_state
-
+  use coupler_types_mod,       only: surface_mass_balance_type
   use data_override_mod,       only: data_override_init
 
 !
@@ -407,7 +408,7 @@ program coupler_main
   use mpp_mod,                 only: mpp_init, mpp_pe, mpp_npes, mpp_root_pe, mpp_sync
   use mpp_mod,                 only: stderr, stdlog, mpp_error, NOTE, FATAL, WARNING
   use mpp_mod,                 only: mpp_set_current_pelist, mpp_declare_pelist
-  use mpp_mod,                 only: input_nml_file
+  use mpp_mod,                 only: input_nml_file, mpp_sum
 
   use mpp_io_mod,              only: mpp_open, mpp_close, mpp_io_clock_on
   use mpp_io_mod,              only: MPP_NATIVE, MPP_RDONLY, MPP_DELETE
@@ -531,6 +532,10 @@ program coupler_main
   logical :: use_hyper_thread = .false.
   integer :: ncores_per_node = 0
   logical :: debug_affinity = .false.
+  real    :: smb_north_lat=90., smb_south_lat=-90., pmt_north=0., pmt_south=0.
+  logical :: read_pmt=.false.
+  logical :: adjust_surface_mass_balance=.false.
+  integer :: pmt_window=1
 
   namelist /coupler_nml/ current_date, calendar, force_date_from_namelist,         &
                          months, days, hours, minutes, seconds, dt_cpld, dt_atmos, &
@@ -541,7 +546,8 @@ program coupler_main
                          check_stocks, restart_interval, do_debug, do_chksum,      &
                          use_hyper_thread, ncores_per_node, debug_affinity,        &
                          concurrent_ice, slow_ice_with_ocean, do_endpoint_chksum,  &
-                         combined_ice_and_ocean
+                         smb_north_lat, smb_south_lat, pmt_north, pmt_south, read_pmt, &
+                         adjust_surface_mass_balance, pmt_window
 
   integer :: initClock, mainClock, termClock
 
@@ -565,6 +571,8 @@ program coupler_main
   integer :: omp_get_thread_num, omp_get_num_threads
   real :: omp_get_wtime
   real :: dsec, omp_sec(2)=0.0, imb_sec(2)=0.0
+
+  type(surface_mass_balance_type) :: SMB_n, SMB_s, SMB_c
 
 !#######################################################################
   INTEGER :: i, status, arg_count
@@ -838,7 +846,7 @@ program coupler_main
 !$OMP&      SHARED(Time_atmos, Atm, Land, Ice, Land_ice_atmos_boundary, Atmos_land_boundary, Atmos_ice_boundary) &
 !$OMP&      SHARED(Ocean_ice_boundary) &
 !$OMP&      SHARED(do_debug, do_chksum, do_atmos, do_land, do_ice, do_concurrent_radiation, omp_sec, imb_sec) &
-!$OMP&      SHARED(newClockc, newClockd, newClocke, newClockf, newClockg, newClockh, newClocki, newClockj, newClockl) 
+!$OMP&      SHARED(newClockc, newClockd, newClocke, newClockf, newClockg, newClockh, newClocki, newClockj, newClockl)
 !$        call omp_set_num_threads(atmos_nthreads)
 !$        dsec=omp_get_wtime()
           if (do_concurrent_radiation) call mpp_clock_begin(newClocki)
@@ -874,10 +882,18 @@ program coupler_main
           if (do_debug)  call print_memuse_stats( 'update down')
 
           call mpp_clock_begin(newClockd)
-          call flux_down_from_atmos( Time_atmos, Atm, Land, Ice, &
+          if (adjust_surface_mass_balance) then
+             call flux_down_from_atmos( Time_atmos, Atm, Land, Ice, &
+                                     Land_ice_atmos_boundary, &
+                                     Atmos_land_boundary, &
+                                     Atmos_ice_boundary ,(/Smb_n,Smb_s,Smb_c/))
+          else
+             call flux_down_from_atmos( Time_atmos, Atm, Land, Ice, &
                                      Land_ice_atmos_boundary, &
                                      Atmos_land_boundary, &
                                      Atmos_ice_boundary )
+          endif
+
           call mpp_clock_end(newClockd)
           if (do_chksum) call atmos_ice_land_chksum('flux_down_from_atmos+', (nc-1)*num_atmos_calls+na, Atm, Land, &
                  Ice, Land_ice_atmos_boundary, Atmos_ice_boundary, Atmos_land_boundary)
@@ -1002,7 +1018,7 @@ program coupler_main
 
     if(Atm%pe) then
      call mpp_clock_begin(newClock5) !Ice is still using ATM pelist and need to be included in ATM clock
-                                        !ATM clock is used for load-balancing the coupled models 
+                                        !ATM clock is used for load-balancing the coupled models
     endif
     if (do_ice .and. Ice%pe) then
 
@@ -1194,6 +1210,9 @@ contains
     integer :: date_restart(6)
     character(len=64)  :: filename, fieldname
     integer :: id_restart, l
+    integer :: is, ie, js, je
+    integer :: j
+    real    :: lat1, lat2
     integer :: omp_get_thread_num, omp_get_num_threads
     integer :: get_cpu_affinity, base_cpu, base_cpu_r, adder
     character(len=8)  :: walldate
@@ -1842,7 +1861,7 @@ contains
 !$      call omp_set_num_threads(ocean_nthreads)
         call mpp_set_current_pelist( Ocean%pelist )
 !$      base_cpu = get_cpu_affinity()
-!$OMP PARALLEL private(adder)    
+!$OMP PARALLEL private(adder)
 !$      if (use_hyper_thread) then
 !$        if (mod(omp_get_thread_num(),2) == 0) then
 !$          adder = omp_get_thread_num()/2
@@ -1857,7 +1876,7 @@ contains
 !$        write(6,*) " ocean  ", get_cpu_affinity(), adder, omp_get_thread_num()
 !$        call flush(6)
 !$      endif
-!$OMP END PARALLEL  
+!$OMP END PARALLEL
       else
         ocean_nthreads = atmos_nthreads
 !$      call omp_set_num_threads(ocean_nthreads)
@@ -1939,7 +1958,7 @@ contains
       ! Check whether the restarts were read successfully.
       call coupler_type_restore_state(Ice%ocean_fluxes, directory='INPUT', &
                                       test_by_field=.true.)
-        endif
+   endif
 
     if ( Ocean%is_ocean_pe ) then
       call mpp_set_current_pelist(Ocean%pelist)
@@ -1952,11 +1971,133 @@ contains
         call restore_state(Ocn_bc_restart(l), directory='INPUT', &
                            nonfatal_missing_files=.true.)
         enddo
+     endif
 
-      ! Check whether the restarts were read successfully.
-      call coupler_type_restore_state(Ocean%fields, directory='INPUT', &
-                                      test_by_field=.true.)
-        endif
+    if (Atm%pe) then
+       if (adjust_surface_mass_balance) then
+          call mpp_get_compute_domain(Atm%Domain, is, ie, js, je)
+          allocate(SMB_n%smb(is:ie,js:je)); SMB_n%smb(:,:)=0.0
+          allocate(SMB_s%smb(is:ie,js:je)); SMB_s%smb(:,:)=0.0
+          allocate(SMB_c%smb(is:ie,js:je)); SMB_c%smb(:,:)=0.0
+          allocate(SMB_n%smb_in(is:ie,js:je)); SMB_n%smb_in(:,:)=0.0
+          allocate(SMB_s%smb_in(is:ie,js:je)); SMB_s%smb_in(:,:)=0.0
+          allocate(SMB_c%smb_in(is:ie,js:je)); SMB_c%smb_in(:,:)=0.0
+          allocate(SMB_n%smb_out(is:ie,js:je)); SMB_n%smb_out(:,:)=0.0
+          allocate(SMB_s%smb_out(is:ie,js:je)); SMB_s%smb_out(:,:)=0.0
+          allocate(SMB_c%smb_out(is:ie,js:je)); SMB_c%smb_out(:,:)=0.0
+          allocate(SMB_n%mask(is:ie,js:je)); SMB_n%mask(:,:)=0.0
+          allocate(SMB_s%mask(is:ie,js:je)); SMB_s%mask(:,:)=0.0
+          allocate(SMB_c%mask(is:ie,js:je)); SMB_c%mask(:,:)=0.0
+          SMB_n%lat_south=smb_north_lat
+          SMB_n%lat_north=90.
+          SMB_n%read_pmt = read_pmt
+          lat1=SMB_n%lat_south*atan(1.0)/45.0
+          lat2=SMB_n%lat_north*atan(1.0)/45.0
+          do j=js,je ; do i=is,ie
+            if (lat1<Atm%lat_bnd(i,j) .and. Atm%lat_bnd(i,j+1)<=lat2) then
+               Smb_n%mask(i,j)=1.0
+            endif
+          enddo; enddo
+          SMB_s%lat_south=-90.
+          SMB_s%lat_north=smb_south_lat
+          SMB_s%read_pmt = read_pmt
+          lat1=SMB_s%lat_south*atan(1.0)/45.0
+          lat2=SMB_s%lat_north*atan(1.0)/45.0
+          do j=js,je ; do i=is,ie
+            if (lat1<Atm%lat_bnd(i,j) .and. Atm%lat_bnd(i,j+1)<=lat2) then
+               Smb_s%mask(i,j)=1.0
+            endif
+          enddo; enddo
+          SMB_c%lat_south=smb_south_lat
+          SMB_c%lat_north=smb_north_lat
+          SMB_c%read_pmt = .false.
+          lat1=SMB_c%lat_south*atan(1.0)/45.0
+          lat2=SMB_c%lat_north*atan(1.0)/45.0
+          do j=js,je ; do i=is,ie
+            if (lat1<Atm%lat_bnd(i,j) .and. Atm%lat_bnd(i,j+1)<=lat2) then
+               Smb_c%mask(i,j)=1.0
+            endif
+          enddo; enddo
+          SMB_n%total=0.0
+          SMB_s%total=0.0
+          SMB_c%total=0.0
+          SMB_n%total_in=0.0
+          SMB_s%total_in=0.0
+          SMB_c%total_in=0.0
+          SMB_n%total_out=0.0
+          SMB_s%total_out=0.0
+          SMB_c%total_out=0.0
+          if (read_pmt) then
+             SMB_n%id_target = init_external_field('INPUT/pmt_north.nc',&
+                  'poleward_moisture_transport')
+             SMB_s%id_target = init_external_field('INPUT/pmt_south.nc',&
+                  'poleward_moisture_transport')
+             SMB_c%id_target = -1
+          else
+             SMB_n%smb_target=pmt_north
+             SMB_s%smb_target=pmt_south
+             SMB_c%smb_target=-1.0*(pmt_north+pmt_south)
+          endif
+          Smb_n%ts_win=pmt_window
+          allocate(Smb_n%smb_hist(pmt_window)); Smb_n%smb_hist(:)=0.0
+          Smb_s%ts_win=pmt_window
+          allocate(Smb_s%smb_hist(pmt_window)); Smb_s%smb_hist(:)=0.0
+          Smb_c%ts_win=pmt_window
+          allocate(Smb_c%smb_hist(pmt_window)); Smb_c%smb_hist(:)=0.0
+       endif
+
+       if (associated(Smb_n%smb_hist)) then
+          filename='pmt_n.res.nc'
+          filename = 'INPUT/'//trim(filename)
+          fieldname='poleward_moisture_transport'
+          allocate(Smb_n%restart_file)
+          id_restart = register_restart_field(Smb_n%restart_file, filename, &
+                       fieldname, Smb_n%smb_hist)
+          if ( field_exist(filename, fieldname) ) then
+            other_fields_exist = .true.
+            write (outunit,*) trim(note_header), ' Reading restart info for ',         &
+                 trim(fieldname), ' from ',  trim(filename)
+            call read_data(filename, fieldname, Smb_n%smb_hist)
+          else
+            call mpp_error(WARNING, trim(error_header) // ' Couldn''t find field ' //     &
+                 trim(fieldname) // ' in file ' //trim(filename))
+          endif
+       endif
+       if (associated(Smb_s%smb_hist)) then
+          filename='pmt_s.res.nc'
+          filename = 'INPUT/'//trim(filename)
+          fieldname='poleward_moisture_transport'
+          allocate(Smb_s%restart_file)
+          id_restart = register_restart_field(Smb_s%restart_file, filename, &
+                       fieldname, Smb_s%smb_hist)
+          if ( field_exist(filename, fieldname) ) then
+            other_fields_exist = .true.
+            write (outunit,*) trim(note_header), ' Reading restart info for ',         &
+                 trim(fieldname), ' from ',  trim(filename)
+            call read_data(filename, fieldname, Smb_s%smb_hist)
+          else
+            call mpp_error(WARNING, trim(error_header) // ' Couldn''t find field ' //     &
+                 trim(fieldname) // ' in file ' //trim(filename))
+          endif
+       endif
+       if (associated(Smb_c%smb_hist)) then
+          filename='pmt_c.res.nc'
+          filename = 'INPUT/'//trim(filename)
+          fieldname='poleward_moisture_transport'
+          allocate(Smb_c%restart_file)
+          id_restart = register_restart_field(Smb_c%restart_file, filename, &
+                       fieldname, Smb_s%smb_hist)
+          if ( field_exist(filename, fieldname) ) then
+            other_fields_exist = .true.
+            write (outunit,*) trim(note_header), ' Reading restart info for ',         &
+                 trim(fieldname), ' from ',  trim(filename)
+            call read_data(filename, fieldname, Smb_c%smb_hist)
+          else
+            call mpp_error(WARNING, trim(error_header) // ' Couldn''t find field ' //     &
+                 trim(fieldname) // ' in file ' //trim(filename))
+          endif
+       endif
+    endif
 
     call mpp_set_current_pelist()
 
