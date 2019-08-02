@@ -547,7 +547,7 @@ program coupler_main
                          use_hyper_thread, ncores_per_node, debug_affinity,        &
                          concurrent_ice, slow_ice_with_ocean, do_endpoint_chksum,  &
                          smb_north_lat, smb_south_lat, pmt_north, pmt_south, read_pmt, &
-                         adjust_surface_mass_balance, pmt_window
+                         adjust_surface_mass_balance, pmt_window, combined_ice_and_ocean
 
   integer :: initClock, mainClock, termClock
 
