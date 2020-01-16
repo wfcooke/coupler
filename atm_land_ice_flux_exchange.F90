@@ -600,7 +600,7 @@ contains
 
     !allocate land_ice_atmos_boundary
     call mpp_get_compute_domain( Atm%domain, is, ie, js, je )
-    land_ice_atmos_boundary%isphum = isphum ! mjh: save specific humidity index for later use
+    !land_ice_atmos_boundary%isphum = isphum ! mjh: save specific humidity index for later use
     allocate( land_ice_atmos_boundary%t(is:ie,js:je) )
     allocate( land_ice_atmos_boundary%u_ref(is:ie,js:je) )  ! bqx
     allocate( land_ice_atmos_boundary%v_ref(is:ie,js:je) )  ! bqx
