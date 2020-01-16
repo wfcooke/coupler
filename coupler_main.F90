@@ -836,7 +836,8 @@ program coupler_main
 !$OMP&    SHARED(Time_atmos, Atm, Land, Ice, Land_ice_atmos_boundary, Atmos_land_boundary, Atmos_ice_boundary) &
 !$OMP&    SHARED(Ocean_ice_boundary) &
 !$OMP&    SHARED(do_debug, do_chksum, do_atmos, do_land, do_ice, do_concurrent_radiation, omp_sec, imb_sec) &
-!$OMP&    SHARED(newClockc, newClockd, newClocke, newClockf, newClockg, newClockh, newClocki, newClockj, newClockl)
+!$OMP&    SHARED(newClockc, newClockd, newClocke, newClockf, newClockg, newClockh, newClocki, newClockj, newClockl) &
+!$OMP&    SHARED(adjust_surface_mass_balance, Smb_n, Smb_s, Smb_c)
 !$      if (omp_get_thread_num() == 0) then
 !$OMP     PARALLEL &
 !$OMP&      NUM_THREADS(1) &
@@ -846,9 +847,11 @@ program coupler_main
 !$OMP&      SHARED(Time_atmos, Atm, Land, Ice, Land_ice_atmos_boundary, Atmos_land_boundary, Atmos_ice_boundary) &
 !$OMP&      SHARED(Ocean_ice_boundary) &
 !$OMP&      SHARED(do_debug, do_chksum, do_atmos, do_land, do_ice, do_concurrent_radiation, omp_sec, imb_sec) &
-!$OMP&      SHARED(newClockc, newClockd, newClocke, newClockf, newClockg, newClockh, newClocki, newClockj, newClockl)
+!$OMP&      SHARED(newClockc, newClockd, newClocke, newClockf, newClockg, newClockh, newClocki, newClockj, newClockl) &
+!$OMP&      SHARED(adjust_surface_mass_balance, Smb_n, Smb_s, Smb_c)
 !$        call omp_set_num_threads(atmos_nthreads)
 !$        dsec=omp_get_wtime()
+
           if (do_concurrent_radiation) call mpp_clock_begin(newClocki)
 
           !      ---- atmosphere dynamics ----
@@ -961,6 +964,7 @@ program coupler_main
 !$OMP&      SHARED(newClockj)
 !$          call omp_set_num_threads(radiation_nthreads)
 !$          dsec=omp_get_wtime()
+
             call mpp_clock_begin(newClockj)
             call update_atmos_model_radiation( Land_ice_atmos_boundary, Atm )
             call mpp_clock_end(newClockj)
@@ -1272,7 +1276,6 @@ contains
     endif
 
 !----- read date and calendar type from restart file -----
-
     if (file_exist('INPUT/coupler.res')) then
 !Balaji: currently written in binary, needs form=MPP_NATIVE
       call mpp_open( unit, 'INPUT/coupler.res', action=MPP_RDONLY )
