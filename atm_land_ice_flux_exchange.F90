@@ -2011,8 +2011,9 @@ contains
          do j=js_atm,je_atm
            do i=is_atm,ie_atm
              if (Smb(k)%mask(i,j) .eq. 1.0) then
-                Atm%lprec(i,j)=Atm%lprec(i,j)*Smb(k)%scale_factor
-                Atm%fprec(i,j)=Atm%fprec(i,j)*Smb(k)%scale_factor
+                !Atm%lprec, Atm%fprec are (1:ie_atm-is_atm+1,1:je_atm-js_atm+1)
+                Atm%lprec(i-is_atm+1,j-js_atm+1)=Atm%lprec(i-is_atm+1,j-js_atm+1)*Smb(k)%scale_factor
+                Atm%fprec(i-is_atm+1,j-js_atm+1)=Atm%fprec(i-is_atm+1,j-js_atm+1)*Smb(k)%scale_factor
              endif
            enddo
          enddo
@@ -3900,7 +3901,9 @@ contains
 
     do j=js,je
       do i=is,ie
-        Smb%smb_in(i,j) = Smb%mask(i,j)*Atm%grid%area(i,j)*(Atm%lprec(i,j) + Atm%fprec(i,j))
+        !Atm%grid%area, LIAb%lhflx are (is:ie,js:je)
+        !Atm%lprec, Atm%fprec are (1:ie-is+1,1:je-js+1)
+        Smb%smb_in(i,j) = Smb%mask(i,j)*Atm%grid%area(i,j)*(Atm%lprec(i-is+1,j-js+1) + Atm%fprec(i-is+1,j-js+1))
         Smb%smb_out(i,j) = Smb%mask(i,j)*Atm%grid%area(i,j)*LIAb%lhflx(i,j)
         Smb%smb(i,j) = Smb%smb_in(i,j) - Smb%smb_out(i,j)
       enddo
@@ -3964,7 +3967,9 @@ contains
 
     do j=js,je
       do i=is,ie
-        SmbC%smb_in(i,j) = SmbC%mask(i,j)*Atm%grid%area(i,j)*(Atm%lprec(i,j) + Atm%fprec(i,j))
+        !Atm%grid%area, LIAb%lhflx are (is:ie,js:je)
+        !Atm%lprec, Atm%fprec are (1:ie-is+1,1:je-js+1)
+        SmbC%smb_in(i,j) = SmbC%mask(i,j)*Atm%grid%area(i,j)*(Atm%lprec(i-is+1,j-js+1) + Atm%fprec(i-is+1,j-js+1))
         SmbC%smb_out(i,j) = SmbC%mask(i,j)*Atm%grid%area(i,j)*LIAb%lhflx(i,j)
         SmbC%smb(i,j)=SmbC%smb_in(i,j)-SmbC%smb_out(i,j)
       enddo

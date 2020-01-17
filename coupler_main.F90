@@ -1997,7 +1997,7 @@ contains
           lat1=SMB_n%lat_south*atan(1.0)/45.0
           lat2=SMB_n%lat_north*atan(1.0)/45.0
           do j=js,je ; do i=is,ie
-            if (lat1<Atm%lat_bnd(i,j) .and. Atm%lat_bnd(i,j+1)<=lat2) then
+            if (lat1<Atm%lat_bnd(i-is+1,j-js+1) .and. Atm%lat_bnd(i-is+1,j-js+2)<=lat2) then
                Smb_n%mask(i,j)=1.0
             endif
           enddo; enddo
@@ -2007,7 +2007,7 @@ contains
           lat1=SMB_s%lat_south*atan(1.0)/45.0
           lat2=SMB_s%lat_north*atan(1.0)/45.0
           do j=js,je ; do i=is,ie
-            if (lat1<Atm%lat_bnd(i,j) .and. Atm%lat_bnd(i,j+1)<=lat2) then
+            if (lat1<Atm%lat_bnd(i-is+1,j-js+1) .and. Atm%lat_bnd(i-is+1,j-js+2)<=lat2) then
                Smb_s%mask(i,j)=1.0
             endif
           enddo; enddo
@@ -2017,7 +2017,7 @@ contains
           lat1=SMB_c%lat_south*atan(1.0)/45.0
           lat2=SMB_c%lat_north*atan(1.0)/45.0
           do j=js,je ; do i=is,ie
-            if (lat1<Atm%lat_bnd(i,j) .and. Atm%lat_bnd(i,j+1)<=lat2) then
+            if (lat1<Atm%lat_bnd(i-is+1,j-js+1) .and. Atm%lat_bnd(i-is+1,j-js+2)<=lat2) then
                Smb_c%mask(i,j)=1.0
             endif
           enddo; enddo
