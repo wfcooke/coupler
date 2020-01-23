@@ -2049,57 +2049,57 @@ contains
           allocate(Smb_c%smb_hist(pmt_window)); Smb_c%smb_hist(:)=0.0
        endif
 
-       if (associated(Smb_n%smb_hist)) then
-          filename='pmt_n.res.nc'
-          filename = 'INPUT/'//trim(filename)
-          fieldname='poleward_moisture_transport'
-          allocate(Smb_n%restart_file)
-          id_restart = register_restart_field(Smb_n%restart_file, filename, &
-                       fieldname, Smb_n%smb_hist)
-          if ( field_exist(filename, fieldname) ) then
-            other_fields_exist = .true.
-            write (outunit,*) trim(note_header), ' Reading restart info for ',         &
-                 trim(fieldname), ' from ',  trim(filename)
-            call read_data(filename, fieldname, Smb_n%smb_hist)
-          else
-            call mpp_error(WARNING, trim(error_header) // ' Couldn''t find field ' //     &
-                 trim(fieldname) // ' in file ' //trim(filename))
-          endif
-       endif
-       if (associated(Smb_s%smb_hist)) then
-          filename='pmt_s.res.nc'
-          filename = 'INPUT/'//trim(filename)
-          fieldname='poleward_moisture_transport'
-          allocate(Smb_s%restart_file)
-          id_restart = register_restart_field(Smb_s%restart_file, filename, &
-                       fieldname, Smb_s%smb_hist)
-          if ( field_exist(filename, fieldname) ) then
-            other_fields_exist = .true.
-            write (outunit,*) trim(note_header), ' Reading restart info for ',         &
-                 trim(fieldname), ' from ',  trim(filename)
-            call read_data(filename, fieldname, Smb_s%smb_hist)
-          else
-            call mpp_error(WARNING, trim(error_header) // ' Couldn''t find field ' //     &
-                 trim(fieldname) // ' in file ' //trim(filename))
-          endif
-       endif
-       if (associated(Smb_c%smb_hist)) then
-          filename='pmt_c.res.nc'
-          filename = 'INPUT/'//trim(filename)
-          fieldname='poleward_moisture_transport'
-          allocate(Smb_c%restart_file)
-          id_restart = register_restart_field(Smb_c%restart_file, filename, &
-                       fieldname, Smb_s%smb_hist)
-          if ( field_exist(filename, fieldname) ) then
-            other_fields_exist = .true.
-            write (outunit,*) trim(note_header), ' Reading restart info for ',         &
-                 trim(fieldname), ' from ',  trim(filename)
-            call read_data(filename, fieldname, Smb_c%smb_hist)
-          else
-            call mpp_error(WARNING, trim(error_header) // ' Couldn''t find field ' //     &
-                 trim(fieldname) // ' in file ' //trim(filename))
-          endif
-       endif
+!       if (associated(Smb_n%smb_hist)) then
+!          filename='pmt_n.res.nc'
+!          filename = 'INPUT/'//trim(filename)
+!          fieldname='poleward_moisture_transport'
+!          allocate(Smb_n%restart_file)
+!          id_restart = register_restart_field(Smb_n%restart_file, filename, &
+!                       fieldname, Smb_n%smb_hist)
+!          if ( field_exist(filename, fieldname) ) then
+!            other_fields_exist = .true.
+!            write (outunit,*) trim(note_header), ' Reading restart info for ',         &
+!                 trim(fieldname), ' from ',  trim(filename)
+!            call read_data(filename, fieldname, Smb_n%smb_hist)
+!          else
+!            call mpp_error(WARNING, trim(error_header) // ' Couldn''t find field ' //     &
+!                 trim(fieldname) // ' in file ' //trim(filename))
+!          endif
+!       endif
+!       if (associated(Smb_s%smb_hist)) then
+!          filename='pmt_s.res.nc'
+!          filename = 'INPUT/'//trim(filename)
+!          fieldname='poleward_moisture_transport'
+!          allocate(Smb_s%restart_file)
+!          id_restart = register_restart_field(Smb_s%restart_file, filename, &
+!                       fieldname, Smb_s%smb_hist)
+!          if ( field_exist(filename, fieldname) ) then
+!            other_fields_exist = .true.
+!            write (outunit,*) trim(note_header), ' Reading restart info for ',         &
+!                 trim(fieldname), ' from ',  trim(filename)
+!            call read_data(filename, fieldname, Smb_s%smb_hist)
+!          else
+!            call mpp_error(WARNING, trim(error_header) // ' Couldn''t find field ' //     &
+!                 trim(fieldname) // ' in file ' //trim(filename))
+!          endif
+!       endif
+       ! if (associated(Smb_c%smb_hist)) then
+       !    filename='pmt_c.res.nc'
+       !    filename = 'INPUT/'//trim(filename)
+       !    fieldname='poleward_moisture_transport'
+       !    allocate(Smb_c%restart_file)
+       !    id_restart = register_restart_field(Smb_c%restart_file, filename, &
+       !                 fieldname, Smb_s%smb_hist)
+       !    if ( field_exist(filename, fieldname) ) then
+       !      other_fields_exist = .true.
+       !      write (outunit,*) trim(note_header), ' Reading restart info for ',         &
+       !           trim(fieldname), ' from ',  trim(filename)
+       !      call read_data(filename, fieldname, Smb_c%smb_hist)
+       !    else
+       !      call mpp_error(WARNING, trim(error_header) // ' Couldn''t find field ' //     &
+       !           trim(fieldname) // ' in file ' //trim(filename))
+       !    endif
+       ! endif
     endif
 
     call mpp_set_current_pelist()
